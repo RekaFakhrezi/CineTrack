@@ -29,10 +29,15 @@ import {
   Confirm,
 } from "../components.jsx";
 function Section({ title, endpoint, community = false, onHero }) {
+  const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
   const result = useAsync(
     (signal) =>
-      community ? customList({ signal }) : tmdbList(endpoint, {}, signal),
-    [endpoint, community],
+      community
+        ? customList({ signal })
+        : isOffline
+          ? Promise.resolve({ items: [] })
+          : tmdbList(endpoint, {}, signal),
+    [endpoint, community, isOffline],
   );
   useEffect(() => {
     if (onHero && result.data?.items) {
@@ -40,6 +45,10 @@ function Section({ title, endpoint, community = false, onHero }) {
       if (slides.length) onHero(slides);
     }
   }, [result.data, onHero]);
+
+  if (!community && isOffline) {
+    return null;
+  }
   return (
     <section>
       <div className="section-heading">
@@ -75,9 +84,21 @@ function Section({ title, endpoint, community = false, onHero }) {
 export function Home() {
   const [slides, setSlides] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const { online } = useApp();
   const dragStartX = useRef(null);
   const dragStartY = useRef(null);
   const isHeroDragging = useRef(false);
+
+  useEffect(() => {
+    if (!online || slides.length === 0) {
+      customList().then((res) => {
+        if (res?.items?.length) {
+          const heroSlides = res.items.filter((m) => m.backdropUrl || m.posterUrl).slice(0, 5);
+          if (heroSlides.length) setSlides(heroSlides);
+        }
+      }).catch(() => {});
+    }
+  }, [online, slides.length]);
 
   useEffect(() => {
     if (slides.length <= 1) return;
@@ -351,12 +372,17 @@ export function CatalogSection() {
         </p>
       )}
       {state.errors.length > 0 && state.items.length > 0 ? (
-        <div className="partial-warning" role="status">
-          <span>⚠️ {state.errors.join(" · ")}</span>
-          <button type="button" onClick={() => load(false)}>Retry</button>
-        </div>
+        (typeof navigator === "undefined" || navigator.onLine) && (
+          <div className="partial-warning" role="status">
+            <span>⚠️ {state.errors.join(" · ")}</span>
+            <button type="button" onClick={() => load(false)}>Retry</button>
+          </div>
+        )
       ) : (
-        state.errors.map((e) => (
+        (typeof navigator !== "undefined" && !navigator.onLine
+          ? state.errors.filter((e) => !e.toLowerCase().includes("tmdb"))
+          : state.errors
+        ).map((e) => (
           <ErrorState key={e} message={e} retry={() => load(false)} />
         ))
       )}

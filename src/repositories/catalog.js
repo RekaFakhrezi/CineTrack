@@ -12,21 +12,23 @@ export async function queryCatalog({
   const jobs = [];
   const sources = [];
   if (source !== "custom" && cursors.tmdb !== null) {
-    sources.push("tmdb");
-    const endpoint = query
-      ? "search"
-      : genre
-        ? "discover"
-        : sort === "top_rated"
-          ? "top_rated"
-          : "popular";
-    jobs.push(
-      tmdbList(
-        endpoint,
-        { page: cursors.tmdb, ...(query ? { query } : genre ? { genre } : {}) },
-        signal,
-      ),
-    );
+    if (typeof navigator === "undefined" || navigator.onLine) {
+      sources.push("tmdb");
+      const endpoint = query
+        ? "search"
+        : genre
+          ? "discover"
+          : sort === "top_rated"
+            ? "top_rated"
+            : "popular";
+      jobs.push(
+        tmdbList(
+          endpoint,
+          { page: cursors.tmdb, ...(query ? { query } : genre ? { genre } : {}) },
+          signal,
+        ),
+      );
+    }
   }
   if (source !== "tmdb" && cursors.custom !== null) {
     sources.push("custom");
