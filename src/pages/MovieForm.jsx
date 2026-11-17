@@ -175,7 +175,18 @@ export function MovieForm() {
     if (file && !rights)
       problems.poster = "Confirm permission to publish this image.";
     setErrors(problems);
-    if (Object.keys(problems).length) return;
+    if (Object.keys(problems).length) {
+      const firstField = Object.keys(problems)[0];
+      const targetEl = document.querySelector(
+        `[name="${firstField}"], textarea[name="${firstField}"], fieldset[name="${firstField}"]`,
+      );
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        targetEl.focus?.();
+      }
+      setError(`Please complete required fields: ${Object.values(problems)[0]}`);
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -186,19 +197,13 @@ export function MovieForm() {
           titleKey(m.title) === titleKey(form.title) &&
           m.year === Number(form.release_year),
       );
-      const incomplete =
-        check.errors.length > 0 ||
-        check.next.tmdb !== null ||
-        check.next.custom !== null;
-      if (matches.length || incomplete) {
-        setDuplicates({ matches, incomplete });
+      if (matches.length > 0) {
+        setDuplicates({ matches, incomplete: false });
         setBusy(false);
         return;
       }
     } catch {
-      setDuplicates({ matches: [], incomplete: true });
-      setBusy(false);
-      return;
+      // In case of catalog search error, continue to publish
     }
     setBusy(false);
     await publish();
@@ -207,6 +212,7 @@ export function MovieForm() {
     <label>
       {label}
       <input
+        name={name}
         type={type}
         value={form[name]}
         maxLength={maxLength}
@@ -261,7 +267,7 @@ export function MovieForm() {
                 {field("release_year", "Release year", "number")}
                 {field("runtime", "Runtime in minutes (optional)", "number")}
               </div>
-              <fieldset>
+              <fieldset name="genre_ids">
                 <legend>Genres</legend>
                 <div className="genre-options">
                   {Object.entries(genres).map(([g, name]) => (
@@ -289,11 +295,13 @@ export function MovieForm() {
               <label>
                 Synopsis
                 <textarea
+                  name="synopsis"
                   required
                   minLength={10}
                   maxLength={2000}
                   rows={6}
                   value={form.synopsis}
+                  placeholder="Describe the story, key themes, or premise (at least 10 characters)..."
                   onChange={(e) => change("synopsis", e.target.value)}
                   aria-invalid={!!errors.synopsis}
                 />
@@ -380,16 +388,18 @@ export function MovieForm() {
               </p>
             </div>
             <div className="form-footer">
-              <p role="status">{draftStatus}</p>
+              <div className="form-footer-info">
+                <p role="status">{draftStatus}</p>
+                {Object.keys(errors).length > 0 && (
+                  <p className="error-text" style={{ margin: "4px 0 0", fontSize: "12.5px" }}>
+                    ⚠️ {Object.values(errors)[0]}
+                  </p>
+                )}
+              </div>
               <button
-                className="primary"
-                disabled={
-                  busy ||
-                  !online ||
-                  !uid ||
-                  Object.keys(validateMovie(form)).length > 0 ||
-                  (!!file && !rights)
-                }
+                type="submit"
+                className="button primary"
+                disabled={busy || !online || !uid}
               >
                 {busy
                   ? "Checking and saving…"

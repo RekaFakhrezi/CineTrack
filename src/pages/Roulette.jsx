@@ -276,35 +276,42 @@ export function Roulette() {
       // 1. Pick a random winner from the candidate pool
       const winner = pool[Math.floor(Math.random() * pool.length)];
 
-      // 2. Calculate target slot index (advances forward by SPIN_ADVANCE_COUNT)
+      // 2. Current slot position & advance forward by SPIN_ADVANCE_COUNT
       const currentSlot = slotIndexRef.current;
       const targetSlot = currentSlot + SPIN_ADVANCE_COUNT;
 
-      // 3. Generate new cards to append to the strip, with winner placed at targetSlot
+      // 3. Keep cards up to currentSlot so the card currently under reticle NEVER shifts
+      const baseCards = (reelMovies.length > currentSlot ? reelMovies.slice(0, currentSlot + 1) : reelMovies);
+      const nextStrip = [...baseCards];
       const poolLen = pool.length;
-      const newCards = [];
       const now = Date.now();
-      for (let i = 1; i <= SPIN_ADVANCE_COUNT + 6; i++) {
-        const slot = currentSlot + i;
-        if (slot === targetSlot) {
-          newCards.push({ ...winner, reelUid: `slot-${slot}-${now}-${winner.key}` });
-        } else {
-          const rand = pool[Math.floor(Math.random() * poolLen)];
-          newCards.push({ ...rand, reelUid: `slot-${slot}-${now}-${rand.key || slot}` });
-        }
+
+      // 4. Intervening random cards between currentSlot and targetSlot
+      for (let s = baseCards.length; s < targetSlot; s++) {
+        const rand = pool[Math.floor(Math.random() * poolLen)];
+        nextStrip.push({ ...rand, reelUid: `slot-${s}-${now}-${rand.key || s}` });
       }
 
-      // 4. Append new cards to reel track
-      setReelMovies((prev) => [...prev, ...newCards]);
+      // 5. Place WINNER at the EXACT targetSlot index! (Guarantees 100% match)
+      nextStrip.push({ ...winner, reelUid: `winner-${targetSlot}-${now}-${winner.key}` });
 
-      // 5. Wait for browser paint so new cards are in the DOM
+      // 6. Buffer cards after targetSlot
+      for (let s = targetSlot + 1; s <= targetSlot + 6; s++) {
+        const rand = pool[Math.floor(Math.random() * poolLen)];
+        nextStrip.push({ ...rand, reelUid: `buffer-${s}-${now}-${rand.key || s}` });
+      }
+
+      // 7. Update reel track
+      setReelMovies(nextStrip);
+
+      // 8. Wait for browser paint so DOM has all cards rendered
       await new Promise((r) => requestAnimationFrame(r));
 
-      // 6. Animate FORWARD smoothly to targetSlot
+      // 9. Animate FORWARD smoothly to targetSlot
       setUseTransition(true);
       setReelOffset(getCenterOffset(targetSlot));
 
-      // 7. Sound effects ticking with deceleration
+      // 10. Sound effects ticking with deceleration
       const totalDuration = 2700;
       const startTime = performance.now();
       let lastTick = 0;
@@ -327,7 +334,7 @@ export function Roulette() {
       await new Promise((r) => setTimeout(r, totalDuration + 120));
       clearInterval(tickTimer);
 
-      // 8. Landed on winner!
+      // 11. Landed on winner! Reticle card and spotlight card are 100% IDENTICAL
       playFanfare();
       slotIndexRef.current = targetSlot;
       setCurrentMovie(winner);
@@ -442,7 +449,12 @@ export function Roulette() {
                   key={movie.reelUid || idx}
                   className={`roulette-card-compact ${isSelected ? "is-selected" : ""}`}
                   onClick={() => {
-                    if (!spinning) setCurrentMovie(movie);
+                    if (!spinning) {
+                      setCurrentMovie(movie);
+                      slotIndexRef.current = idx;
+                      setUseTransition(true);
+                      setReelOffset(getCenterOffset(idx));
+                    }
                   }}
                 >
                   <div className="roulette-card-poster-wrap">
